@@ -7,33 +7,33 @@ from dotenv import load_dotenv
 from groq import Groq
 import os
 
+# ============================================
+# LOAD ENV VARIABLES
+# ============================================
 load_dotenv()
-# ============================================
-# 🔥 GROQ CLIENT
-# ============================================
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
 
 # ============================================
-# 🔥 EMBEDDING MODEL
+# GROQ CLIENT
 # ============================================
-embedding_model = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
+client = Groq(
+    api_key=os.getenv("GROQ_API_KEY")
 )
 
 # ============================================
-# 🔥 GLOBAL VECTOR DATABASE
+# GLOBAL VECTOR DATABASE
 # ============================================
 vector_db = None
 
 # ============================================
-# 🔥 LOAD REPOSITORY
+# LOAD REPOSITORY
 # ============================================
 def load_repo(repo_path):
 
     global vector_db
 
     documents = []
+
+    print("📂 Loading repository...")
 
     # ============================================
     # READ FILES
@@ -42,7 +42,7 @@ def load_repo(repo_path):
 
         for file in files:
 
-            # Allowed extensions
+            # Supported file types
             if file.endswith((
                 ".py",
                 ".js",
@@ -68,38 +68,48 @@ def load_repo(repo_path):
                             Document(
                                 page_content=content,
                                 metadata={
-                                    "source": file_path
+                                    "source": file
                                 }
                             )
                         )
 
                 except Exception as e:
-                    print("Error reading file:", e)
+                    print("❌ Error reading file:", e)
 
     # ============================================
     # SPLIT DOCUMENTS
     # ============================================
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
+        chunk_size=800,
+        chunk_overlap=100
     )
 
     docs = splitter.split_documents(documents)
+
+    print(f"✅ Total chunks created: {len(docs)}")
+
+    # ============================================
+    # LOAD EMBEDDING MODEL
+    # (INSIDE FUNCTION FOR RENDER MEMORY FIX)
+    # ============================================
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
     # ============================================
     # CREATE VECTOR DATABASE
     # ============================================
     vector_db = FAISS.from_documents(
         docs,
-        embedding_model
+        embeddings
     )
 
-    print("✅ VECTOR DB CREATED")
+    print("✅ VECTOR DATABASE CREATED")
 
     return "✅ Repository Loaded Successfully!"
 
 # ============================================
-# 🔥 ASK QUESTION
+# ASK QUESTION
 # ============================================
 def ask_question(query):
 
@@ -108,26 +118,31 @@ def ask_question(query):
     try:
 
         # ============================================
-        # IF VECTOR DB EXISTS → USE RAG
+        # RAG MODE
         # ============================================
         if vector_db is not None:
 
-            # Search relevant chunks
             docs = vector_db.similarity_search(
                 query,
-                k=8
+                k=5
             )
 
-            # If nothing found
+            # No relevant docs found
             if not docs:
+
                 return "I could not find this in the uploaded repository."
 
-            # Build context
+            # ============================================
+            # BUILD CONTEXT
+            # ============================================
             context = ""
 
             for doc in docs:
 
-                source = doc.metadata.get("source", "Unknown File")
+                source = doc.metadata.get(
+                    "source",
+                    "Unknown File"
+                )
 
                 context += f"""
 
@@ -136,7 +151,7 @@ FILE: {source}
 CODE:
 {doc.page_content}
 
-==================================================
+====================================================
 """
 
             # ============================================
@@ -145,31 +160,31 @@ CODE:
             final_prompt = f"""
 You are RepoCode AI.
 
-You MUST answer ONLY from the repository content below.
+You MUST answer ONLY using the repository content below.
 
 STRICT RULES:
 1. DO NOT give general programming explanations
 2. DO NOT use outside knowledge
 3. ONLY answer from repository code
 4. Mention filenames when possible
-5. If answer not found, say:
+5. If answer is not found, say:
 "I could not find this in the uploaded repository."
 
-==================================================
+====================================================
 REPOSITORY CONTENT
-==================================================
+====================================================
 
 {context}
 
-==================================================
+====================================================
 QUESTION
-==================================================
+====================================================
 
 {query}
 
-==================================================
+====================================================
 ANSWER
-==================================================
+====================================================
 """
 
         # ============================================
