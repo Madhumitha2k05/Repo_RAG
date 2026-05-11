@@ -1,13 +1,45 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+
 from app.services.rag_pipeline import ask_question
 
 router = APIRouter()
 
-class Query(BaseModel):
-    question: str
+# ============================================
+# REQUEST MODEL
+# ============================================
+
+class ChatRequest(BaseModel):
+    query: str
+
+# ============================================
+# GENERAL CHATBOT
+# ============================================
+
+@router.post("/chat")
+def general_chat(data: ChatRequest):
+
+    answer = ask_question(
+        data.query,
+        use_repo=False
+    )
+
+    return {
+        "answer": answer
+    }
+
+# ============================================
+# REPOSITORY CHATBOT
+# ============================================
 
 @router.post("/ask")
-def ask(query: Query):
-    answer = ask_question(query.question)
-    return {"response": answer}
+def repo_chat(data: ChatRequest):
+
+    answer = ask_question(
+        data.query,
+        use_repo=True
+    )
+
+    return {
+        "answer": answer
+    }

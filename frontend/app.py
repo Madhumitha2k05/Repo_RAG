@@ -4,12 +4,17 @@ import requests
 # ============================================
 # BACKEND URLS
 # ============================================
+
+CHAT_API = "http://127.0.0.1:8000/chat"
+
 ASK_API = "http://127.0.0.1:8000/ask"
+
 LOAD_REPO_API = "http://127.0.0.1:8000/load_repo"
 
 # ============================================
 # PAGE CONFIG
 # ============================================
+
 st.set_page_config(
     page_title="Repo_RAG",
     page_icon="🤖",
@@ -19,6 +24,7 @@ st.set_page_config(
 # ============================================
 # BEAUTIFUL CSS
 # ============================================
+
 creative_design = """
 <style>
 
@@ -146,11 +152,13 @@ div.stButton > button:first-child:hover {
     gap: 20px;
     justify-content: center;
 }
+
 .stTabs [data-baseweb="tab"] {
     background-color: rgba(255, 255, 255, 0.2);
     border-radius: 10px 10px 0px 0px;
     padding: 10px 20px;
 }
+
 .stTabs [aria-selected="true"] {
     background-color: rgba(255, 255, 255, 0.4);
     border-bottom-color: transparent !important;
@@ -164,139 +172,290 @@ st.markdown(creative_design, unsafe_allow_html=True)
 # ============================================
 # TITLE
 # ============================================
-st.markdown("<div class='main-title'>🤖 Repo RAG</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>AI Powered Repository Assistant 🚀</div>", unsafe_allow_html=True)
+
+st.markdown(
+    "<div class='main-title'>🤖 Repo RAG</div>",
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    "<div class='subtitle'>AI Powered Repository Assistant 🚀</div>",
+    unsafe_allow_html=True
+)
 
 # ============================================
-# SESSION STATE (Separate memory for tabs)
+# SESSION STATE
 # ============================================
+
 if "general_msgs" not in st.session_state:
     st.session_state.general_msgs = []
+
 if "repo_msgs" not in st.session_state:
     st.session_state.repo_msgs = []
 
 # ============================================
-# NAVIGATION TABS
+# TABS
 # ============================================
-tab1, tab2 = st.tabs(["💬 General Chatbot", "📂 Repocode Assistant"])
 
-# --------------------------------------------
-# TAB 1: GENERAL CHATBOT
-# --------------------------------------------
+tab1, tab2 = st.tabs(
+    ["💬 General Chatbot", "📂 Repocode Assistant"]
+)
+
+# ============================================
+# TAB 1 — GENERAL CHATBOT
+# ============================================
+
 with tab1:
+
     st.markdown("<div class='glass-box'>", unsafe_allow_html=True)
+
     st.subheader("💬 Ask Anything")
-    
-    # Display Chat History (General)
+
+    # CHAT HISTORY
+
     st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
+
     for msg in st.session_state.general_msgs:
+
         if msg["role"] == "user":
-            st.markdown(f"<div class='user-msg'><b>You:</b><br>{msg['content']}</div>", unsafe_allow_html=True)
+
+            st.markdown(
+                f"<div class='user-msg'><b>You:</b><br>{msg['content']}</div>",
+                unsafe_allow_html=True
+            )
+
         else:
-            st.markdown(f"<div class='bot-msg'>🤖 <b>Repocode:</b><br>{msg['content']}</div>", unsafe_allow_html=True)
+
+            st.markdown(
+                f"<div class='bot-msg'>🤖 <b>Repocode:</b><br>{msg['content']}</div>",
+                unsafe_allow_html=True
+            )
+
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Input and Buttons
-    general_input = st.text_input("", placeholder="Ask a general coding question...", key="gen_input")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        ask_gen = st.button("💬 Ask Bot", key="btn_ask_gen")
-    with col2:
-        clear_gen = st.button("🗑 Clear Chat", key="btn_clear_gen")
+    # INPUT
 
-    # Ask Logic (General)
-    if ask_gen:
+    general_input = st.text_input(
+        "",
+        placeholder="Ask anything...",
+        key="general_input"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        ask_general = st.button(
+            "💬 Ask Bot",
+            key="ask_general"
+        )
+
+    with col2:
+        clear_general = st.button(
+            "🗑 Clear Chat",
+            key="clear_general"
+        )
+
+    # ASK LOGIC
+
+    if ask_general:
+
         if general_input:
-            st.session_state.general_msgs.append({"role": "user", "content": general_input})
+
+            st.session_state.general_msgs.append({
+                "role": "user",
+                "content": general_input
+            })
+
             try:
+
                 with st.spinner("Thinking... 🤔"):
-                    response = requests.post(ASK_API, json={"question": general_input}, timeout=60)
+
+                    response = requests.post(
+                        CHAT_API,
+                        json={
+                            "query": general_input
+                        },
+                        timeout=60
+                    )
+
                     if response.status_code == 200:
-                        answer = response.json().get("response", "No response from AI")
-                        st.session_state.general_msgs.append({"role": "assistant", "content": answer})
+
+                        answer = response.json().get(
+                            "answer",
+                            "No response from AI"
+                        )
+
+                        st.session_state.general_msgs.append({
+                            "role": "assistant",
+                            "content": answer
+                        })
+
                         st.rerun()
+
                     else:
                         st.error("Server Error")
+
             except Exception as e:
                 st.error(f"Error: {e}")
+
         else:
             st.warning("Enter a question first")
 
-    # Clear Logic (General)
-    if clear_gen:
+    # CLEAR
+
+    if clear_general:
         st.session_state.general_msgs = []
         st.rerun()
+
     st.markdown("</div>", unsafe_allow_html=True)
 
+# ============================================
+# TAB 2 — REPOCODE ASSISTANT
+# ============================================
 
-# --------------------------------------------
-# TAB 2: REPOCODE ASSISTANT (Load + Chat)
-# --------------------------------------------
 with tab2:
-    # 1. Load Repo Section
+
+    # LOAD REPO
+
     st.markdown("<div class='glass-box'>", unsafe_allow_html=True)
+
     st.subheader("📂 Load GitHub Repository")
-    
-    repo_url = st.text_input("Paste Repository URL", placeholder="https://github.com/user/repository.git", key="repo_url")
-    
-    if st.button("🚀 Load Repository", key="btn_load_repo"):
+
+    repo_url = st.text_input(
+        "Paste Repository URL",
+        placeholder="https://github.com/user/repository.git",
+        key="repo_url"
+    )
+
+    if st.button(
+        "🚀 Load Repository",
+        key="load_repo"
+    ):
+
         if repo_url:
+
             try:
+
                 with st.spinner("Loading repository..."):
-                    response = requests.post(LOAD_REPO_API, json={"repo_url": repo_url}, timeout=60)
+
+                    response = requests.post(
+                        LOAD_REPO_API,
+                        json={
+                            "repo_url": repo_url
+                        },
+                        timeout=300
+                    )
+
                     if response.status_code == 200:
                         st.success("✅ Repository Loaded Successfully!")
+
                     else:
                         st.error("❌ Failed to load repository")
+
             except Exception as e:
                 st.error(f"Error: {e}")
+
         else:
             st.warning("Please enter repository URL")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # 2. Repo Chat Section
+    # REPO CHAT
+
     st.markdown("<div class='glass-box'>", unsafe_allow_html=True)
+
     st.subheader("💬 Ask about the Repository")
 
-    # Display Chat History (Repo)
     st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
+
     for msg in st.session_state.repo_msgs:
+
         if msg["role"] == "user":
-            st.markdown(f"<div class='user-msg'><b>You:</b><br>{msg['content']}</div>", unsafe_allow_html=True)
+
+            st.markdown(
+                f"<div class='user-msg'><b>You:</b><br>{msg['content']}</div>",
+                unsafe_allow_html=True
+            )
+
         else:
-            st.markdown(f"<div class='bot-msg'>🤖 <b>Repocode:</b><br>{msg['content']}</div>", unsafe_allow_html=True)
+
+            st.markdown(
+                f"<div class='bot-msg'>🤖 <b>Repocode:</b><br>{msg['content']}</div>",
+                unsafe_allow_html=True
+            )
+
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Input and Buttons
-    repo_input = st.text_input("", placeholder="Ask about the loaded code...", key="rep_input")
-    
-    col3, col4 = st.columns(2)
-    with col3:
-        ask_repo = st.button("💬 Ask Repocode", key="btn_ask_repo")
-    with col4:
-        clear_repo = st.button("🗑 Clear Chat", key="btn_clear_repo")
+    repo_input = st.text_input(
+        "",
+        placeholder="Ask about the repository...",
+        key="repo_input"
+    )
 
-    # Ask Logic (Repo)
+    col3, col4 = st.columns(2)
+
+    with col3:
+        ask_repo = st.button(
+            "💬 Ask Repo",
+            key="ask_repo"
+        )
+
+    with col4:
+        clear_repo = st.button(
+            "🗑 Clear Chat",
+            key="clear_repo"
+        )
+
+    # REPO ASK
+
     if ask_repo:
+
         if repo_input:
-            st.session_state.repo_msgs.append({"role": "user", "content": repo_input})
+
+            st.session_state.repo_msgs.append({
+                "role": "user",
+                "content": repo_input
+            })
+
             try:
+
                 with st.spinner("Searching repository... 🔍"):
-                    response = requests.post(ASK_API, json={"question": repo_input}, timeout=60)
+
+                    response = requests.post(
+                        ASK_API,
+                        json={
+                            "query": repo_input
+                        },
+                        timeout=300
+                    )
+
                     if response.status_code == 200:
-                        answer = response.json().get("response", "No response from AI")
-                        st.session_state.repo_msgs.append({"role": "assistant", "content": answer})
+
+                        answer = response.json().get(
+                            "answer",
+                            "No response from AI"
+                        )
+
+                        st.session_state.repo_msgs.append({
+                            "role": "assistant",
+                            "content": answer
+                        })
+
                         st.rerun()
+
                     else:
                         st.error("Server Error")
+
             except Exception as e:
                 st.error(f"Error: {e}")
+
         else:
             st.warning("Enter a question first")
 
-    # Clear Logic (Repo)
+    # CLEAR
+
     if clear_repo:
         st.session_state.repo_msgs = []
         st.rerun()
+
     st.markdown("</div>", unsafe_allow_html=True)

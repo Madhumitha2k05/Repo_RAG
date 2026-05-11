@@ -1,6 +1,6 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from dotenv import load_dotenv
 
@@ -10,11 +10,13 @@ import os
 # ============================================
 # LOAD ENV VARIABLES
 # ============================================
+
 load_dotenv()
 
 # ============================================
 # GROQ CLIENT
 # ============================================
+
 client = Groq(
     api_key=os.getenv("GROQ_API_KEY")
 )
@@ -22,27 +24,29 @@ client = Groq(
 # ============================================
 # GLOBAL VECTOR DATABASE
 # ============================================
-vector_db = None
+
+vector_db = {}
 
 # ============================================
 # LOAD REPOSITORY
 # ============================================
+
 def load_repo(repo_path):
 
     global vector_db
 
     documents = []
 
-    print("📂 Loading repository...")
+    print("\n📂 Loading repository...")
 
     # ============================================
     # READ FILES
     # ============================================
+
     for root, dirs, files in os.walk(repo_path):
 
         for file in files:
 
-            # Supported file types
             if file.endswith((
                 ".py",
                 ".js",
@@ -60,91 +64,134 @@ def load_repo(repo_path):
 
                     file_path = os.path.join(root, file)
 
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(
+                        file_path,
+                        "r",
+                        encoding="utf-8",
+                        errors="ignore"
+                    ) as f:
 
                         content = f.read()
 
-                        documents.append(
-                            Document(
-                                page_content=content,
-                                metadata={
-                                    "source": file
-                                }
+                        if content.strip():
+
+                            documents.append(
+
+                                Document(
+                                    page_content=content,
+                                    metadata={
+                                        "source": file
+                                    }
+                                )
+
                             )
-                        )
 
                 except Exception as e:
+
                     print("❌ Error reading file:", e)
 
+    print(f"\n✅ Total files loaded: {len(documents)}")
+
     # ============================================
-    # SPLIT DOCUMENTS
+    # SPLITTER
     # ============================================
+
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=100
+        chunk_size=1200,
+        chunk_overlap=200
     )
 
     docs = splitter.split_documents(documents)
 
-    print(f"✅ Total chunks created: {len(docs)}")
+    print(f"\n✅ Total chunks created: {len(docs)}")
 
     # ============================================
-    # LOAD EMBEDDING MODEL
-    # (INSIDE FUNCTION FOR RENDER MEMORY FIX)
+    # EMBEDDINGS
     # ============================================
+
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
     # ============================================
-    # CREATE VECTOR DATABASE
+    # VECTOR DB
     # ============================================
-    vector_db = FAISS.from_documents(
+
+    vector_db["db"] = FAISS.from_documents(
         docs,
         embeddings
     )
 
-    print("✅ VECTOR DATABASE CREATED")
+    print("\n✅ VECTOR DATABASE CREATED")
 
     return "✅ Repository Loaded Successfully!"
+
 
 # ============================================
 # ASK QUESTION
 # ============================================
-def ask_question(query):
+
+def ask_question(query, use_repo=False):
 
     global vector_db
 
     try:
 
         # ============================================
-        # RAG MODE
+        # GENERAL CHATBOT MODE
         # ============================================
-        if vector_db is not None:
 
-            docs = vector_db.similarity_search(
-                query,
-                k=5
+        if use_repo == False:
+
+            response = client.chat.completions.create(
+
+                model="llama-3.3-70b-versatile",
+
+                messages=[
+                    {
+                        "role": "user",
+                        "content": query
+                    }
+                ],
+
+                temperature=0.3
             )
 
-            # No relevant docs found
-            if not docs:
+            return response.choices[0].message.content
 
-                return "I could not find this in the uploaded repository."
+        # ============================================
+        # REPOSITORY MODE
+        # ============================================
 
-            # ============================================
-            # BUILD CONTEXT
-            # ============================================
-            context = ""
+        if "db" not in vector_db:
 
-            for doc in docs:
+            return "Please load a repository first."
 
-                source = doc.metadata.get(
-                    "source",
-                    "Unknown File"
-                )
+        docs = vector_db["db"].similarity_search(
+            query + " repository source code function class file",
+            k=15
+        )
 
-                context += f"""
+        print(f"\n🔥 Retrieved Docs: {len(docs)}")
+
+        if len(docs) == 0:
+
+            return "I could not find this in the uploaded repository."
+
+        # ============================================
+        # CONTEXT
+        # ============================================
+
+        context = ""
+
+        for doc in docs:
+
+            source = doc.metadata.get(
+                "source",
+                "Unknown File"
+            )
+
+            context += f"""
 
 FILE: {source}
 
@@ -154,20 +201,22 @@ CODE:
 ====================================================
 """
 
-            # ============================================
-            # FINAL PROMPT
-            # ============================================
-            final_prompt = f"""
+        # ============================================
+        # PROMPT
+        # ============================================
+
+        final_prompt = f"""
 You are RepoCode AI.
 
-You MUST answer ONLY using the repository content below.
+You MUST answer ONLY from the uploaded repository.
 
 STRICT RULES:
-1. DO NOT give general programming explanations
-2. DO NOT use outside knowledge
-3. ONLY answer from repository code
-4. Mention filenames when possible
-5. If answer is not found, say:
+1. NEVER give generic programming explanations
+2. NEVER use outside knowledge
+3. ALWAYS answer from repository code
+4. Mention filenames whenever possible
+5. Explain functions/classes/files ONLY from repository
+6. If answer not found, say:
 "I could not find this in the uploaded repository."
 
 ====================================================
@@ -183,20 +232,14 @@ QUESTION
 {query}
 
 ====================================================
-ANSWER
+ANSWER FROM REPOSITORY ONLY
 ====================================================
 """
 
         # ============================================
-        # NORMAL CHATBOT MODE
+        # GROQ RESPONSE
         # ============================================
-        else:
 
-            final_prompt = query
-
-        # ============================================
-        # SEND TO GROQ
-        # ============================================
         response = client.chat.completions.create(
 
             model="llama-3.3-70b-versatile",
@@ -208,7 +251,7 @@ ANSWER
                 }
             ],
 
-            temperature=0.2
+            temperature=0
         )
 
         return response.choices[0].message.content

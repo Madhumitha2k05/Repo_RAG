@@ -6,10 +6,16 @@ from app.services.rag_pipeline import load_repo
 
 router = APIRouter()
 
+# ============================================
+# REQUEST MODEL
+# ============================================
 
 class RepoRequest(BaseModel):
     repo_url: str
 
+# ============================================
+# LOAD REPOSITORY
+# ============================================
 
 @router.post("/load_repo")
 def load_repository(data: RepoRequest):
@@ -19,16 +25,20 @@ def load_repository(data: RepoRequest):
         print("\n🔥 RECEIVED REPO URL:")
         print(data.repo_url)
 
-        # STEP 1: CLONE REPO
+        # ============================================
+        # CLONE REPOSITORY
+        # ============================================
+
         repo_path = clone_repo(data.repo_url)
 
-        print("\n✅ REPO CLONED TO:")
+        print("\n✅ REPOSITORY CLONED:")
         print(repo_path)
 
-        # STEP 2: CREATE VECTOR DB
-        result = load_repo(repo_path)
+        # ============================================
+        # CREATE VECTOR DATABASE
+        # ============================================
 
-        print("\n✅ VECTOR DB CREATED")
+        result = load_repo(repo_path)
 
         return {
             "message": result
